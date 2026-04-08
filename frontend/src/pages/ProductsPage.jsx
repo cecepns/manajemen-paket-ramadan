@@ -9,7 +9,7 @@ import SearchInput from '../components/SearchInput'
 import useDebounce from '../hooks/useDebounce'
 
 const init = { id: null, name: '', price: '', payment_days_total: '', stock: '', description: '', image: null }
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'https://api-paket-ramadan.isavralabel.com'
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'https://www.api-paket-ramadan.isavralabel.com'
 
 const toImageUrl = (path) => {
   if (!path) return ''
