@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import Compressor from 'compressorjs'
 import { Plus, Pencil, Trash2, Image as ImageIcon } from 'lucide-react'
+import Select from 'react-select'
 import api from '../lib/api'
 import Pagination from '../components/Pagination'
 import Modal from '../components/Modal'
 import SearchInput from '../components/SearchInput'
 import useDebounce from '../hooks/useDebounce'
 
-const init = { id: null, name: '', price: '', payment_days_total: '', stock: '', description: '', image: null }
+const init = { id: null, name: '', price: '', payment_days_total: '', stock: '', description: '', image: null, category_id: '' }
 const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'https://www.api-paket-ramadan.isavralabel.com'
 
 const toImageUrl = (path) => {
@@ -28,6 +29,8 @@ export default function ProductsPage() {
   const [form, setForm] = useState(init)
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [categories, setCategories] = useState([])
   const debouncedSearch = useDebounce(search, 1000)
   const selectedImagePreview = useMemo(
     () => (form.image instanceof Blob ? URL.createObjectURL(form.image) : ''),
@@ -40,15 +43,22 @@ export default function ProductsPage() {
     }
   }, [selectedImagePreview])
 
+  useEffect(() => {
+    api.get('/package_categories').then((r) => setCategories(r.data.data || []))
+  }, [])
+
+  const categoryOptions = categories.map((c) => ({ value: String(c.id), label: c.name }))
+
   const load = useCallback(() => {
-    const query = new URLSearchParams({ page: String(page), limit: '10', q: debouncedSearch }).toString()
-    return api.get(`/products.php?${query}`).then((r) => {
+    const query = new URLSearchParams({ page: String(page), limit: '10', q: debouncedSearch })
+    if (categoryFilter) query.set('category_id', categoryFilter)
+    return api.get(`/products?${query.toString()}`).then((r) => {
       setList(r.data.data)
       setMeta(r.data.meta)
     })
-  }, [page, debouncedSearch])
+  }, [page, debouncedSearch, categoryFilter])
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [debouncedSearch])
+  useEffect(() => { setPage(1) }, [debouncedSearch, categoryFilter])
 
   const onFile = (file) =>
     new Compressor(file, {
@@ -65,13 +75,14 @@ export default function ProductsPage() {
     e.preventDefault()
     const fd = new FormData()
     if (form.id) fd.append('id', String(form.id))
+    if (form.category_id !== '' && form.category_id != null) fd.append('category_id', String(form.category_id))
     fd.append('name', form.name)
     fd.append('price', String(form.price ?? 0))
     fd.append('payment_days_total', String(form.payment_days_total === '' ? 0 : form.payment_days_total))
     fd.append('stock', String(form.stock ?? 0))
     fd.append('description', form.description ?? '')
     if (form.image instanceof Blob) fd.append('image', form.image)
-    await api.post('/products_save.php', fd)
+    await api.post('/products_save', fd)
     toast.success(form.id ? 'Produk diupdate' : 'Produk ditambah')
     setForm(init)
     setOpen(false)
@@ -83,14 +94,18 @@ export default function ProductsPage() {
     setOpen(true)
   }
   const edit = (p) => {
-    setForm({ ...init, ...p })
+    setForm({
+      ...init,
+      ...p,
+      category_id: p.category_id ? String(p.category_id) : '',
+    })
     setOpen(true)
   }
   const remove = (id) => {
     toast((t) => (
       <div className="flex items-center gap-2">
         <span>Hapus produk ini?</span>
-        <button className="rounded bg-rose-600 px-2 py-1 text-white" onClick={async () => { await api.post('/products_delete.php', { id }); toast.dismiss(t.id); toast.success('Terhapus'); load() }}>Ya</button>
+        <button className="rounded bg-rose-600 px-2 py-1 text-white" onClick={async () => { await api.post('/products_delete', { id }); toast.dismiss(t.id); toast.success('Terhapus'); load() }}>Ya</button>
       </div>
     ))
   }
@@ -99,6 +114,16 @@ export default function ProductsPage() {
     <div className="card">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold text-slate-800">Manajemen Produk</h2>
+        <div className="w-56">
+          <p className="mb-1 text-xs font-medium text-slate-600">Kategori</p>
+          <Select
+            isClearable
+            placeholder="Semua kategori"
+            options={categoryOptions}
+            value={categoryOptions.find((o) => o.value === categoryFilter) || null}
+            onChange={(s) => setCategoryFilter(s?.value || '')}
+          />
+        </div>
         <SearchInput value={search} onChange={setSearch} placeholder="Cari nama/deskripsi produk..." />
         <button
           onClick={openAdd}
@@ -127,7 +152,10 @@ export default function ProductsPage() {
                 )}
                 <div>
                   <p className="font-semibold">{p.name}</p>
-                  <p className="text-sm text-slate-500">Rp {Number(p.price).toLocaleString('id-ID')} | Cicilan {Number(p.payment_days_total || 0)} hari | Stok {p.stock}</p>
+                  <p className="text-sm text-slate-500">
+                    {p.category_name ? <span className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs">{p.category_name}</span> : null}
+                    Rp {Number(p.price).toLocaleString('id-ID')} | Cicilan {Number(p.payment_days_total || 0)} hari | Stok {p.stock}
+                  </p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -142,6 +170,16 @@ export default function ProductsPage() {
 
       <Modal open={open} onClose={() => setOpen(false)} title={form.id ? 'Edit Produk' : 'Tambah Produk'}>
         <form onSubmit={submit}>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Kategori paket</label>
+          <Select
+            className="mb-2"
+            isClearable
+            placeholder="Pilih kategori (opsional)"
+            options={categoryOptions}
+            value={categoryOptions.find((o) => o.value === String(form.category_id)) || null}
+            onChange={(s) => setForm({ ...form, category_id: s?.value || '' })}
+            classNamePrefix="react-select"
+          />
           <label className="mb-1 block text-sm font-medium text-slate-700">Nama Produk</label>
           <input className="mb-2 w-full rounded-lg border border-slate-300 p-2" placeholder="Nama" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <label className="mb-1 block text-sm font-medium text-slate-700">Harga</label>

@@ -18,6 +18,8 @@ const emptySummary = {
   sum_remaining_amount: 0,
   count_belum_lunas: 0,
   count_lunas: 0,
+  sum_deposits: 0,
+  selisih_pembayaran_anggota_vs_setoran: 0,
 }
 
 export default function ReportsPage() {
@@ -34,7 +36,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (isReseller) return
-    api.get('/resellers.php?page=1&limit=100').then((r) => setResellers(r.data.data))
+    api.get('/resellers?page=1&limit=100').then((r) => setResellers(r.data.data))
   }, [isReseller])
 
   const resellerOptions = useMemo(
@@ -51,7 +53,7 @@ export default function ReportsPage() {
       q: debouncedCustomerQ,
     })
     if (!isReseller && resellerId) params.set('reseller_id', resellerId)
-    const { data } = await api.get(`/reports.php?${params.toString()}`)
+    const { data } = await api.get(`/reports?${params.toString()}`)
     setRows(data.data || [])
     setMeta(data.meta || { total_pages: 1, total: 0 })
     setSummary({ ...emptySummary, ...(data.meta?.summary || {}) })
@@ -77,7 +79,7 @@ export default function ReportsPage() {
         q: debouncedCustomerQ,
       })
       if (!isReseller && resellerId) params.set('reseller_id', resellerId)
-      const { data } = await api.get(`/reports.php?${params.toString()}`)
+      const { data } = await api.get(`/reports?${params.toString()}`)
       all.push(...(data.data || []))
       const totalPages = Number(data.meta?.total_pages || 1)
       if (current >= totalPages) break
@@ -184,7 +186,7 @@ export default function ReportsPage() {
         <button className="inline-flex items-center gap-2 rounded bg-rose-600 px-4 py-2 text-white" type="button" onClick={exportPdf}><FileText size={16} /> PDF</button>
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-8">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jumlah order</p>
           <p className="mt-1 text-2xl font-bold text-slate-800">{summary.order_count}</p>
@@ -208,6 +210,16 @@ export default function ReportsPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lunas</p>
           <p className="mt-1 text-2xl font-bold text-emerald-700">{summary.count_lunas}</p>
+        </div>
+        <div className="rounded-xl border border-violet-200 bg-violet-50/80 p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-800">Total setoran ke owner</p>
+          <p className="mt-1 text-lg font-bold text-violet-900">Rp {Number(summary.sum_deposits || 0).toLocaleString('id-ID')}</p>
+        </div>
+        <div className="rounded-xl border border-sky-200 bg-sky-50/80 p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-sky-900">Selisih: pembayaran anggota − setoran</p>
+          <p className="mt-1 text-lg font-bold text-sky-950">
+            Rp {Number(summary.selisih_pembayaran_anggota_vs_setoran || 0).toLocaleString('id-ID')}
+          </p>
         </div>
       </div>
 

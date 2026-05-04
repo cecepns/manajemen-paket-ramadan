@@ -23,7 +23,7 @@ export default function ResellersPage() {
 
   const load = useCallback(() => {
     const query = new URLSearchParams({ page: String(page), limit: '10', q: debouncedSearch }).toString()
-    return api.get(`/resellers.php?${query}`).then((r) => {
+    return api.get(`/resellers?${query}`).then((r) => {
       setList(r.data.data)
       setMeta(r.data.meta)
     })
@@ -33,7 +33,7 @@ export default function ResellersPage() {
 
   const submit = async (e) => {
     e.preventDefault()
-    await api.post('/resellers_save.php', form)
+    await api.post('/resellers_save', form)
     toast.success(form.id ? 'Reseller diupdate' : 'Reseller ditambah')
     setForm(init)
     setOpen(false)
@@ -54,7 +54,7 @@ export default function ResellersPage() {
         <button
           className="rounded bg-rose-600 px-2 py-1 text-white"
           onClick={async () => {
-            await api.post('/resellers_delete.php', { id })
+            await api.post('/resellers_delete', { id })
             toast.dismiss(t.id)
             toast.success('Reseller dihapus')
             load()
@@ -67,7 +67,7 @@ export default function ResellersPage() {
   }
 
   const openOrdersDetail = async (resellerId) => {
-    const { data } = await api.get(`/reseller_orders.php?reseller_id=${resellerId}`)
+    const { data } = await api.get(`/reseller_orders?reseller_id=${resellerId}`)
     setDetail(data.data || { reseller: null, orders: [] })
     const initialEditingPayments = {}
     ;(data.data?.orders || []).forEach((order) => {
@@ -93,7 +93,7 @@ export default function ResellersPage() {
 
   const saveOrderPayment = async (orderId) => {
     const payload = editingPayments[orderId] || { amount_paid: 0, payment_days_total: 0 }
-    await api.post('/reseller_order_payment_save.php', {
+    await api.post('/reseller_order_payment_save', {
       order_id: orderId,
       amount_paid: Number(payload.amount_paid || 0),
       payment_days_total: Number(payload.payment_days_total || 0),

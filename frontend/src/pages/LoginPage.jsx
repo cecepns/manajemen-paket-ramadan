@@ -12,7 +12,7 @@ export default function LoginPage() {
     e.preventDefault()
     try {
       if (mode === 'admin') {
-        const { data } = await api.post('/login.php', form)
+        const { data } = await api.post('/login', form)
         const token = (data?.data?.token || '').trim()
         localStorage.setItem('token', token)
         localStorage.setItem('auth_role', 'admin')
@@ -21,7 +21,7 @@ export default function LoginPage() {
         toast.success('Login berhasil')
         navigate('/')
       } else {
-        const { data } = await api.post('/reseller_login.php', form)
+        const { data } = await api.post('/reseller_login', form)
         const token = (data?.data?.token || '').trim()
         localStorage.setItem('token', token)
         localStorage.setItem('auth_role', 'reseller')

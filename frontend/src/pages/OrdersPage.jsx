@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, PackagePlus, Pencil, Trash2, Eye } from 'lucide-react'
+import { Plus, PackagePlus, Pencil, Trash2, Eye, XCircle } from 'lucide-react'
 import Select from 'react-select'
 import api from '../lib/api'
 import Pagination from '../components/Pagination'
@@ -8,12 +8,26 @@ import Modal from '../components/Modal'
 import SearchInput from '../components/SearchInput'
 import useDebounce from '../hooks/useDebounce'
 
+const PAYMENT_PERIODS = [
+  { value: '295_hari', label: '295 Hari' },
+  { value: '325_hari', label: '325 Hari' },
+  { value: '42_minggu', label: '42 Minggu' },
+  { value: '45_minggu', label: '45 Minggu' },
+]
+
+function periodLabel(code) {
+  if (code === 'legacy') return 'Historis (harga×qty)'
+  return PAYMENT_PERIODS.find((p) => p.value === code)?.label || code || '—'
+}
+
 const initForm = {
   id: null,
   customer_name: '',
   customer_phone: '',
+  customer_address: '',
   reseller_id: '',
   payment_status: 'belum_lunas',
+  payment_period: '42_minggu',
   payment_days_total: 0,
   amount_paid: 0,
   items: [{ product_id: '', product_name: '', qty: 1 }],
@@ -46,7 +60,7 @@ export default function OrdersPage() {
     })
     if (debouncedCustomerName.trim()) query.set('customer_name', debouncedCustomerName.trim())
     if (!isReseller && filterResellerId) query.set('reseller_id', filterResellerId)
-    return api.get(`/orders.php?${query.toString()}`).then((r) => {
+    return api.get(`/orders?${query.toString()}`).then((r) => {
       setOrders(r.data.data)
       setMeta(r.data.meta)
     })
@@ -55,7 +69,7 @@ export default function OrdersPage() {
   useEffect(() => { setPage(1) }, [debouncedCustomerName, filterResellerId])
   useEffect(() => {
     if (isReseller) return
-    api.get('/resellers.php?page=1&limit=100').then((r) => setResellers(r.data.data))
+    api.get('/resellers?page=1&limit=100').then((r) => setResellers(r.data.data))
   }, [isReseller])
   useEffect(() => {
     const query = new URLSearchParams({
@@ -63,21 +77,27 @@ export default function OrdersPage() {
       limit: '100',
       q: debouncedProductSearch,
     }).toString()
-    api.get(`/products.php?${query}`).then((r) => setProducts(r.data.data || []))
+    api.get(`/products?${query}`).then((r) => setProducts(r.data.data || []))
   }, [debouncedProductSearch])
 
   const save = async (e) => {
     e.preventDefault()
+    const filledItems = form.items.filter((item) => item.product_id)
+    if (!filledItems.length) {
+      toast.error('Pilih minimal satu produk')
+      return
+    }
     const payload = {
       ...form,
       payment_days_total: Number(form.payment_days_total || 0),
       amount_paid: Number(form.amount_paid || 0),
-      items: form.items.map((item) => ({
+      payment_period: form.payment_period,
+      items: filledItems.map((item) => ({
         product_id: item.product_id,
         qty: Math.max(1, Number(item.qty || 1)),
       })),
     }
-    await api.post('/orders_save.php', payload)
+    await api.post('/orders_save', payload)
     toast.success(mode === 'edit' ? 'Order diupdate' : 'Order tersimpan')
     setForm(initForm)
     setOpenForm(false)
@@ -90,14 +110,16 @@ export default function OrdersPage() {
     setOpenForm(true)
   }
   const openEdit = async (id) => {
-    const { data } = await api.get(`/orders_detail.php?id=${id}`)
+    const { data } = await api.get(`/orders_detail?id=${id}`)
     const d = data.data
     setForm({
       id: d.id,
       customer_name: d.customer_name || '',
       customer_phone: d.customer_phone || '',
+      customer_address: d.customer_address || '',
       reseller_id: d.reseller_id ? String(d.reseller_id) : '',
       payment_status: d.payment_status || 'belum_lunas',
+      payment_period: d.payment_period ?? '42_minggu',
       payment_days_total: Number(d.payment_days_total || 0),
       amount_paid: Number(d.amount_paid || 0),
       items: (d.items || []).map((it) => ({ product_id: String(it.product_id), product_name: it.product_name || '', qty: Number(it.qty) })),
@@ -106,7 +128,7 @@ export default function OrdersPage() {
     setOpenForm(true)
   }
   const openView = async (id) => {
-    const { data } = await api.get(`/orders_detail.php?id=${id}`)
+    const { data } = await api.get(`/orders_detail?id=${id}`)
     setDetailOrder(data.data)
     setOpenDetail(true)
   }
@@ -117,7 +139,7 @@ export default function OrdersPage() {
         <button
           className="rounded bg-rose-600 px-2 py-1 text-white"
           onClick={async () => {
-            await api.post('/orders_delete.php', { id })
+            await api.post('/orders_delete', { id })
             toast.dismiss(t.id)
             toast.success('Order dihapus')
             load()
@@ -168,6 +190,7 @@ export default function OrdersPage() {
                 <th className="px-3 py-3 min-w-[160px]">Pelanggan</th>
                 {!isReseller && <th className="px-3 py-3">Reseller</th>}
                 <th className="px-3 py-3">Tanggal</th>
+                <th className="px-3 py-3">Periode</th>
                 <th className="px-3 py-3 text-right">Total order</th>
                 <th className="px-3 py-3 text-right">Sudah dibayar</th>
                 <th className="px-3 py-3 text-right">Sisa bayar</th>
@@ -188,6 +211,7 @@ export default function OrdersPage() {
                   </td>
                   {!isReseller && <td className="px-3 py-3 text-slate-600">{o.reseller_name || '-'}</td>}
                   <td className="px-3 py-3 text-slate-600 whitespace-nowrap">{o.order_date}</td>
+                  <td className="px-3 py-3 text-slate-600 text-sm whitespace-nowrap">{periodLabel(o.payment_period)}</td>
                   <td className="px-3 py-3 text-right font-semibold text-slate-800">Rp {Number(o.total_amount).toLocaleString('id-ID')}</td>
                   <td className="px-3 py-3 text-right text-emerald-700">
                     {o.payment_status === 'belum_lunas'
@@ -226,7 +250,7 @@ export default function OrdersPage() {
               ))}
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan={isReseller ? 11 : 12} className="px-3 py-8 text-center text-slate-500">Data order tidak ditemukan.</td>
+                  <td colSpan={isReseller ? 12 : 13} className="px-3 py-8 text-center text-slate-500">Data order tidak ditemukan.</td>
                 </tr>
               )}
             </tbody>
@@ -241,6 +265,8 @@ export default function OrdersPage() {
           <input className="mb-2 w-full rounded-lg border border-slate-300 p-2" placeholder="Nama Pelanggan" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
           <label className="mb-1 block text-sm font-medium text-slate-700">No HP Pelanggan</label>
           <input className="mb-2 w-full rounded-lg border border-slate-300 p-2" placeholder="No HP Pelanggan" value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} />
+          <label className="mb-1 block text-sm font-medium text-slate-700">Alamat</label>
+          <textarea className="mb-2 w-full rounded-lg border border-slate-300 p-2" placeholder="Alamat lengkap anggota" rows={2} value={form.customer_address} onChange={(e) => setForm({ ...form, customer_address: e.target.value })} />
           {!isReseller && (
             <div className="mb-2">
               <label className="mb-1 block text-sm font-medium text-slate-700">Reseller</label>
@@ -261,14 +287,32 @@ export default function OrdersPage() {
             <option value="belum_lunas">Belum Lunas</option>
             <option value="lunas">Lunas</option>
           </select>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Periode pembayaran</label>
+          <select
+            className="mb-1 w-full rounded-lg border border-slate-300 p-2"
+            value={form.payment_period}
+            onChange={(e) => setForm({ ...form, payment_period: e.target.value })}
+          >
+            {mode === 'edit' && form.payment_period === 'legacy' ? (
+              <option value="legacy">{periodLabel('legacy')} — ubah jika ingin pakai periode baru</option>
+            ) : null}
+            {PAYMENT_PERIODS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <p className="mb-3 text-xs text-slate-500">
+            Menentukan pengali total order (harga × qty × periode). Contoh: paket mingguan Rp 15.000, qty 1, periode 42 Minggu → total Rp 630.000.
+          </p>
           {form.payment_status === 'belum_lunas' && (
             <>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Total Jumlah Hari Bayar</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Hari terpakai (cicilan)</label>
               <input
                 type="number"
                 min="0"
                 className="mb-2 w-full rounded-lg border border-slate-300 p-2"
-                placeholder="Total Jumlah Hari Bayar"
+                placeholder="Hari terpakai saat ini"
                 value={form.payment_days_total}
                 onChange={(e) => setForm({ ...form, payment_days_total: toNumberOrEmpty(e.target.value) })}
               />
@@ -285,7 +329,21 @@ export default function OrdersPage() {
           )}
           {form.items.map((it, idx) => (
             <div key={idx} className="mb-2 rounded-lg border border-slate-200 p-2">
-              <label className="mb-1 block text-sm font-medium text-slate-700">Produk #{idx + 1}</label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-sm font-medium text-slate-700">Produk #{idx + 1}</label>
+                {form.items.length > 1 ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                    onClick={() => {
+                      const next = form.items.filter((_, i) => i !== idx)
+                      setForm({ ...form, items: next.length ? next : [{ product_id: '', product_name: '', qty: 1 }] })
+                    }}
+                  >
+                    <XCircle size={14} /> Hapus baris
+                  </button>
+                ) : null}
+              </div>
               <Select
                 isClearable
                 isSearchable
@@ -332,6 +390,8 @@ export default function OrdersPage() {
           <div>
             <p className="font-semibold">{detailOrder.customer_name} {detailOrder.reseller_name ? `- via ${detailOrder.reseller_name}` : ''}</p>
             <p className="text-sm text-slate-600">HP: {detailOrder.customer_phone || '-'}</p>
+            {detailOrder.customer_address ? <p className="text-sm text-slate-600">Alamat: {detailOrder.customer_address}</p> : null}
+            <p className="text-sm text-slate-500">Periode: {periodLabel(detailOrder.payment_period)}</p>
             <p className="text-sm text-slate-500">{detailOrder.order_date}</p>
             <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${detailOrder.payment_status === 'lunas' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
               {detailOrder.payment_status === 'lunas' ? 'Lunas' : 'Belum Lunas'}

@@ -7,7 +7,7 @@ export default function DashboardPage() {
   const isReseller = localStorage.getItem('auth_role') === 'reseller'
 
   useEffect(() => {
-    api.get('/dashboard.php').then((r) => setStats(r.data.data || {}))
+    api.get('/dashboard').then((r) => setStats(r.data.data || {}))
   }, [])
 
   if (isReseller) {

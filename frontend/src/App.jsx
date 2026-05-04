@@ -7,6 +7,8 @@ import ProductsPage from './pages/ProductsPage'
 import ResellersPage from './pages/ResellersPage'
 import OrdersPage from './pages/OrdersPage'
 import ReportsPage from './pages/ReportsPage'
+import TransactionsPage from './pages/TransactionsPage'
+import PackageCategoriesPage from './pages/PackageCategoriesPage'
 
 function AdminDashboard() {
   if (localStorage.getItem('auth_role') === 'reseller') {
@@ -38,6 +40,8 @@ export default function App() {
       <Route path="/products" element={<AdminOnly><Layout><ProductsPage /></Layout></AdminOnly>} />
       <Route path="/resellers" element={<AdminOnly><Layout><ResellersPage /></Layout></AdminOnly>} />
       <Route path="/orders" element={<Protected><Layout><OrdersPage /></Layout></Protected>} />
+      <Route path="/transactions" element={<Protected><Layout><TransactionsPage /></Layout></Protected>} />
+      <Route path="/package-categories" element={<AdminOnly><Layout><PackageCategoriesPage /></Layout></AdminOnly>} />
       <Route path="/reports" element={<Protected><Layout><ReportsPage /></Layout></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

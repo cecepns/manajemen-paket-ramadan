@@ -7,13 +7,16 @@ import api from '../lib/api'
 const adminMenus = [
   ['/', 'Dashboard'],
   ['/products', 'Produk'],
+  ['/package-categories', 'Kategori Paket'],
   ['/resellers', 'Reseller'],
   ['/orders', 'Order'],
+  ['/transactions', 'Transaksi'],
   ['/reports', 'Laporan'],
 ]
 
 const resellerMenus = [
   ['/orders', 'Order saya'],
+  ['/transactions', 'Transaksi'],
   ['/reports', 'Laporan'],
 ]
 
